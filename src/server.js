@@ -47,7 +47,7 @@ io.on('connection', (socket) => {
       }
 
       if(!rooms[roomId]){
-        rooms[roomId] = { users: [{username:username, modelName: modelName, position: [0,0,0]}] }
+        rooms[roomId] = { users: [{username:username, modelName: modelName, position: [0,0,0], rotationY: 0, movement: false}] }
       }
   
       socket.join(roomId);
@@ -62,7 +62,9 @@ io.on('connection', (socket) => {
         const user = {
             username : username,
             modelName: modelName,
-            position: [0,0,0]
+            position: [0,0,0],
+            rotationY: 0,
+            movement: false
         }
 
         if(rooms[roomId].users){
@@ -77,11 +79,14 @@ io.on('connection', (socket) => {
       }
     });
     
-    socket.on('changedMyPosition', ({roomId, username, position})=>{
+    socket.on('changedMyPosition', ({roomId, username, position, rotationY, movement})=>{
+      // console.log(rotationY);
       if(rooms[roomId]){
         rooms[roomId].users.map((user) => {
           if(user.username == username){
             user.position = position;
+            user.rotationY = rotationY;
+            user.movement = movement;
           }
         })
         socket.emit("userJoined",rooms[roomId].users)

@@ -40,7 +40,7 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
   
     socket.on('createRoom', ({ username, modelName, roomName },callback) => {
-      const roomId = roomName.toLowerCase().replace(/\s+/g, '-');
+      const roomId = roomName.trim().split(' ').join('-');
       if (io.sockets.adapter.rooms.get(roomId)) {
         callback({ success: false, error: 'Room name is already taken.' });
         return;

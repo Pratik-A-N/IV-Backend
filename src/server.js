@@ -5,6 +5,7 @@ import http from "http"
 import { Server } from "socket.io"
 import userRouter from "./Routes/userRouter.js"
 import { AuthMiddleware } from "./Middlewares/AuthMiddleware.js"
+import { SocketAddress } from "net"
 
 const corsOptions = {
     origin:'http://localhost:5173', 
@@ -47,9 +48,20 @@ io.on('connection', (socket) => {
       }
 
       if(!rooms[roomId]){
-        rooms[roomId] = { users: [{username:username, modelName: modelName, position: [0,0,0], rotationY: 0, movement: false}] }
+        rooms[roomId] = { 
+          users: [{
+            username:username, 
+            modelName: modelName, 
+            position: [0,0,0], 
+            rotationY: 0, 
+            movement: false
+          }] 
+        }
       }
-  
+
+      socket.roomId = roomId; // Store roomId on the socket object
+      socket.username = username; // Store username on the socket object
+      
       socket.join(roomId);
       socket.emit("userJoined",rooms[roomId].users);
       console.log(`Room created : ${roomName} (ID: ${roomId})`);
@@ -58,6 +70,8 @@ io.on('connection', (socket) => {
   
     socket.on('joinRoom', ({roomId, username, modelName}) => {
       if (io.sockets.adapter.rooms.get(roomId)) {
+        socket.roomId = roomId; // Store roomId on the socket object
+        socket.username = username; // Store username on the socket object
         socket.join(roomId);
         const user = {
             username : username,
@@ -68,14 +82,30 @@ io.on('connection', (socket) => {
         }
 
         if(rooms[roomId].users){
-          rooms[roomId].users.push(user);
+          if(!(rooms[roomId].users.some(usr => usr.username == user.username))){
+            rooms[roomId].users.push(user);
+          }
         }
         console.log(rooms[roomId]);
         socket.emit("userJoined",rooms[roomId].users)
         socket.to(roomId).emit('userJoined', rooms[roomId].users);
         console.log(`User ${socket.id} joined room ${roomId}`);
       } else {
-        console.log(`Room ${roomId} does not exist.`);
+        delete rooms[roomId];
+        rooms[roomId] = { 
+          users: [{
+            username:username, 
+            modelName: modelName, 
+            position: [0,0,0], 
+            rotationY: 0, 
+            movement: false
+          }] 
+        }
+        socket.roomId = roomId; // Store roomId on the socket object
+        socket.username = username; // Store username on the socket object
+        
+        socket.join(roomId);
+        socket.emit("userJoined",rooms[roomId].users);
       }
     });
     
@@ -95,10 +125,29 @@ io.on('connection', (socket) => {
         console.log(`Room ${roomId} does not exist.`)
       }
     })
-  
+    
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
+
+      const { roomId, username } = socket;
+
+      if (roomId && rooms[roomId]) {
+          // Remove the user from the room
+          rooms[roomId].users = rooms[roomId].users.filter(user => user.username !== username);
+
+          console.log(`User ${username} removed from room ${roomId}`);
+          
+          // Notify other users in the room
+          socket.to(roomId).emit('userDisconnected', { username, roomId });
+
+          // If the room is now empty, delete it
+          if (rooms[roomId].users.length === 0) {
+              delete rooms[roomId];
+              console.log(`Room ${roomId} deleted (no users left).`);
+          }
+      }
     });
+
   });
   
   // Start the server
